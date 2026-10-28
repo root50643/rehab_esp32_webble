@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-Hant"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>復健機 Web BLE 測試台</title>
+<link rel="stylesheet" href="style.css"><script src="protocol.js" defer></script><script src="app.js" defer></script></head>
+<body><main class="shell">
+<header><div><p class="eyebrow">REHAB ESP32 · WEB BLUETOOTH</p><h1>復健機 BLE 測試台</h1><p class="muted">連接 ESP32，測試心率中繼、機台讀值與控制指令。</p></div><span id="connection" class="badge">未連線</span></header>
+<div id="secureNotice" class="notice warning" hidden>請從 HTTPS 或 localhost 開啟，使用支援 Web Bluetooth 的 Chrome/Edge。Safari、Firefox 不支援 BLE 連線。</div>
+<div id="message" class="notice" role="status" hidden></div>
+<section class="toolbar"><button id="connect" class="primary">選擇並連線裝置</button><button id="disconnect" disabled>中斷連線</button><button id="reconnect" hidden>重新連線</button></section>
+<section class="metrics" aria-label="即時資料">
+<article><span>機台狀態</span><strong id="machineState">—</strong><small id="stateAge">尚未收到</small></article>
+<article><span>中繼心率</span><strong><b id="bpm">—</b> <i>BPM</i></strong><small id="bpmAge">尚未收到</small></article>
+<article><span>轉速</span><strong><b id="rpm">—</b> <i>RPM</i></strong><small id="rpmAge">尚未收到</small></article>
+<article><span>實際阻力</span><strong><b id="resistance">—</b> <i>LEVEL</i></strong><small id="resistanceAge">尚未收到</small></article>
+<article><span>扭力 · 原始值</span><strong id="torque">—</strong><small id="torqueAge">尚未收到</small></article>
+<article><span>卡片 UID</span><strong id="cardUid" class="uid">—</strong><small>保留前導零</small></article>
+</section>
+<section class="grid">
+<article class="panel"><h2>控制權</h2><p id="leaseState">唯讀模式 · 請先連線</p><div class="buttons"><button id="claim" disabled>取得控制權</button><button id="release" disabled>釋放並停止</button></div><p class="muted">租約 30 秒，持有者每 10 秒續租。控制者斷線或逾時會停止機台。</p></article>
+<article class="panel"><h2>機台控制</h2><div class="buttons"><button data-command="start" disabled>開始</button><button data-command="stop" class="stop" disabled>停止</button><button data-command="pause" disabled>暫停協定測試</button></div><label for="resistanceInput">目標阻力（16-bit 原始值）</label><input id="resistanceInput" type="number" min="0" max="65535" step="1" value="1"><button id="setResistance" disabled>設定阻力</button><p class="muted">0 取消待送目標，不實際下送 0。扭力單位尚未確認，僅供讀取。</p></article>
+<article class="panel"><h2>心率感測器</h2><label for="heartMac">MAC 位址</label><input id="heartMac" placeholder="AA:BB:CC:DD:EE:FF" maxlength="17" autocomplete="off" spellcheck="false"><div class="buttons"><button id="saveHeart" disabled>儲存位址</button><button id="scanHeart" disabled>掃描</button></div><p class="muted">機台停止後才能儲存；留白停用中繼。選擇候選後按儲存。</p><ul id="heartResults" class="results"></ul></article>
+<article class="panel"><h2>機台資料</h2><pre id="extraData">等待機台資料…</pre></article>
+<article class="panel events"><h2>命令與事件</h2><pre id="log" aria-live="polite">等待裝置通知…</pre></article>
+</section><footer>附近 BLE 客戶端可讀資料；控制租約用來仲裁操作，不提供身分驗證。不要公開分享含真實卡號或心率的畫面。</footer>
+</main></body></html>
