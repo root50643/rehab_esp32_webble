@@ -1,7 +1,7 @@
 (function(root){
   'use strict';
   const P=root.RehabProtocol,$=id=>document.getElementById(id);
-  let device,commandChar,connected=false,controller=false,requestId=0,messageId=0,heartbeat,lastState,receivedAt=0;
+  let device,commandChar,connected=false,controller=false,requestId=0,messageId=0,heartbeat,lastState,receivedAt=0,epoch=0;
   let writeChain=Promise.resolve();const pending=new Map(),subscriptions=[];
   const supported=!!(root.isSecureContext&&navigator.bluetooth);
   function log(message,data){$('log').textContent=(`${new Date().toLocaleTimeString()} ${message}${data?' '+JSON.stringify(data):''}\n`+$('log').textContent).slice(0,7000);}
@@ -34,19 +34,19 @@
   function send(cmd,fields={}){
     if(!connected||!commandChar)return Promise.reject(new Error('尚未連線'));
     let payload;try{payload=P.command(cmd,++requestId,fields);}catch(error){return Promise.reject(error);}
-    const id=payload.id;
+    const id=payload.id,session=epoch,target=commandChar;
     return new Promise((resolve,reject)=>{
-      const timer=setTimeout(()=>{pending.delete(id);reject(new Error('命令回覆逾時；未自動重送'))},8000);pending.set(id,{resolve,reject,timer});
+      const timer=setTimeout(()=>{if(session===epoch)pending.delete(id);reject(new Error('命令回覆逾時；未自動重送'))},8000);pending.set(id,{resolve,reject,timer});
       writeChain=writeChain.catch(()=>{}).then(async()=>{
-        if(!connected||!commandChar)throw new Error('連線已中斷');
+        if(!connected||session!==epoch)throw new Error('連線已中斷');
         // 20 bytes works at the BLE default MTU, across all supported browsers.
-        for(const frame of P.chunkPayload(P.encodeJson(payload),20,++messageId,P.CHANNEL.command))await commandChar.writeValueWithResponse(frame);
+        for(const frame of P.chunkPayload(P.encodeJson(payload),20,++messageId,P.CHANNEL.command)){if(session!==epoch)throw new Error('連線已中斷');await target.writeValueWithResponse(frame);}
         log('送出命令',payload);
-      }).catch(error=>{const item=pending.get(id);if(item){clearTimeout(item.timer);pending.delete(id);item.reject(error);}});
+      }).catch(error=>{if(session!==epoch)return;const item=pending.get(id);if(item){clearTimeout(item.timer);pending.delete(id);item.reject(error);}});
     });
   }
   function disconnected(){
-    connected=false;controller=false;commandChar=null;clearInterval(heartbeat);
+    ++epoch;connected=false;controller=false;commandChar=null;clearInterval(heartbeat);
     for(const [ch,listener] of subscriptions)ch.removeEventListener('characteristicvaluechanged',listener);subscriptions.length=0;
     for(const item of pending.values()){clearTimeout(item.timer);item.reject(new Error('連線已中斷'));}pending.clear();
     $('leaseState').textContent='已斷線 · 控制權釋放';buttons();render();say('連線已中斷，ESP32 將執行失聯停止。',true);

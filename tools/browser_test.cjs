@@ -14,6 +14,7 @@ const server=http.createServer((req,res)=>{const name=req.url==='/'?'index.html'
         async startNotifications(){return this;}
         async readValue(){return new DataView(new TextEncoder().encode(JSON.stringify({v:1,protocol:1,peer_key:1})).buffer);}
         async writeValueWithResponse(frame){
+          if(window.bleMock?.hold){window.bleMock.hold=false;return new Promise(resolve=>{window.bleMock.releaseOld=resolve;});}
           const P=window.RehabProtocol;this.assembler??=new P.FrameReassembler(3,1024);const data=this.assembler.push(frame);if(!data)return;
           const cmd=P.decodeJson(data);writes.push(cmd);
           if(cmd.cmd==='claim')owner=true;if(cmd.cmd==='release')owner=false;
@@ -24,7 +25,7 @@ const server=http.createServer((req,res)=>{const name=req.url==='/'?'index.html'
       }
       function emit(kind,value){const P=window.RehabProtocol,ch=chars.get(P.UUID[kind]);for(const frame of P.chunkPayload(P.encodeJson(value),20,5,P.CHANNEL[kind])){ch.value=new DataView(frame.buffer);ch.dispatchEvent(new Event('characteristicvaluechanged'));}}
       function state(){emit('state',{v:1,type:'state',seq:1,uptime_ms:1,heart:{bpm:82,age_ms:1},machine:{state:'Start',rpm:300,reported_level:7,torque_raw:250,age28_ms:1,age3f_ms:1},rfid:{card_present:true,uid:'00010203'},lease:{owner:owner?1:null,remaining_ms:30000,you_control:owner}});}
-      const device=new EventTarget();device.name='RehabWebBLE test';device.gatt={connected:false,async connect(){this.connected=true;return{getPrimaryService:async()=>({getCharacteristic:async uuid=>{if(!chars.has(uuid))chars.set(uuid,new Characteristic());return chars.get(uuid);}})};},disconnect(){this.connected=false;device.dispatchEvent(new Event('gattserverdisconnected'));}};
+      const device=new EventTarget();device.name='RehabWebBLE test';device.gatt={connected:false,async connect(){this.connected=true;return{getPrimaryService:async()=>({getCharacteristic:async uuid=>{if(!chars.has(uuid))chars.set(uuid,new Characteristic());return chars.get(uuid);}})};},disconnect(){this.connected=false;owner=false;device.dispatchEvent(new Event('gattserverdisconnected'));}};
       Object.defineProperty(navigator,'bluetooth',{value:{requestDevice:async()=>device}});
       window.bleMock={writes,emit,state};
     });
@@ -38,8 +39,11 @@ const server=http.createServer((req,res)=>{const name=req.url==='/'?'index.html'
     await page.evaluate(()=>window.bleMock.state());
     for(const width of [360,768,1440]){await page.setViewportSize({width,height:950});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);}
     const evidence=path.resolve(__dirname,'../build/screenshots');fs.mkdirSync(evidence,{recursive:true});await page.screenshot({path:path.join(evidence,'webble-desktop.png'),fullPage:true});
+    await page.evaluate(()=>{window.bleMock.hold=true;});await page.click('[data-command="start"]');await page.waitForFunction(()=>!!window.bleMock.releaseOld);
     await page.click('#disconnect');assert.equal(await page.locator('[data-command="start"]').isDisabled(),true);assert.equal(await page.textContent('#bpm'),'—');
     await page.click('#reconnect');await page.waitForFunction(()=>document.getElementById('bpm').textContent==='82');
+    await page.evaluate(()=>window.bleMock.releaseOld());
+    assert.equal(await page.locator('[data-command="start"]').isDisabled(),true);
     assert.deepEqual(errors,[]);console.log('Browser BLE mock, notifications, lease UI, writes, stale values, reconnect and RWD passed.');
   }finally{await browser.close();server.close();}
 })().catch(error=>{console.error(error);server.close();process.exitCode=1;});
