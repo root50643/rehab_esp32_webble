@@ -38,6 +38,7 @@ NimBLEServer* server=nullptr;
 NimBLECharacteristic *stateChar=nullptr,*eventChar=nullptr,*responseChar=nullptr;
 Peer peers[kPeers];webble::ControlLease lease;
 uint32_t nextKey=0,sequence=0,eventSequence=0,lastSample=0;
+uint32_t lastAdvertiseAttempt=0;
 bool initialized=false,stopRequired=false,advertiseRequired=false,scanReport=false;
 uint32_t lastHeartDisconnects=0,lastReaderErrors=0;
 bool lastPresent=false,lastHeartValid=false;
@@ -197,16 +198,16 @@ void begin(){
   auto* info=service->createCharacteristic(kInfo,NIMBLE_PROPERTY::READ,512);
   for(auto* c:{stateChar,eventChar,responseChar,command,info})c->setCallbacks(&characteristicCallbacks);
   info->setValue(infoJson().c_str());if(!server->start()){Serial.println("GATT server start failed");return;}
-  auto* advertising=NimBLEDevice::getAdvertising();advertising->setName("RehabWebBLE");advertising->addServiceUUID(kService);advertising->enableScanResponse(true);
-  initialized=true;advertiseRequired=true;Serial.println("WebBLE v1 ready: RehabWebBLE; 4 browser peers + 1 heart rate link");
+  auto* advertising=NimBLEDevice::getAdvertising();advertising->addServiceUUID(kService);advertising->enableScanResponse(true);advertising->setName("RehabWebBLE");
+  initialized=true;advertiseRequired=true;lastAdvertiseAttempt=millis()-1000;Serial.println("WebBLE v1 ready: RehabWebBLE; 4 browser peers + 1 heart rate link");
 }
 void tick(){
   if(!initialized)return;
   Lock guard;uint32_t now=millis();
   if(lease.expire(now))stopRequired=true;
   if(stopRequired){controller.failSafeStop();if(controller.idle())stopRequired=false;}
-  if(advertiseRequired){size_t count=0;for(auto& p:peers)if(p.connection!=kNoConnection)++count;
-    if(count<kPeers)NimBLEDevice::getAdvertising()->start();else NimBLEDevice::getAdvertising()->stop();advertiseRequired=false;}
+  if(advertiseRequired&&webble::elapsed(now,lastAdvertiseAttempt,1000)){lastAdvertiseAttempt=now;size_t count=0;for(auto& p:peers)if(p.connection!=kNoConnection)++count;
+    if(count<kPeers)advertiseRequired=!NimBLEDevice::getAdvertising()->start();else {NimBLEDevice::getAdvertising()->stop();advertiseRequired=false;}}
   Incoming in{};for(int i=0;i<4&&xQueueReceive(incoming,&in,0)==pdTRUE;++i){auto* p=find(in.connection);if(p&&p->key==in.key)process(*p,in.json,now);}
   if(webble::elapsed(now,lastSample,100)){
     lastSample=now;++sequence;

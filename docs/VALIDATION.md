@@ -13,6 +13,8 @@
 
 browser mock只驗證前端，不證明作業系統BLE或ESP32無線功能。程式可編譯不等於外設驗收。
 
+本機app為685,248 bytes／4,194,304 bytes，SHA-256 `32C05FB237CC009F8308BD58F8CC817B5264A7C1DCA35567141012E90ABD9BAF`。產物在忽略的build/artifacts，未燒錄至裝置。不同建置路徑或時間的binary雜湊可能不同。
+
 ## 必須完成的實機驗收
 
 1. Windows Chrome/Edge與Android Chrome的裝置選擇、權限、重新連線與MTU差異。
